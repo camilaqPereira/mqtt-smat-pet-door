@@ -154,11 +154,6 @@ volatile char tags[3][24];
 char tag_id[3][6] = {"Tag 1\0", "Tag 2\0", "Tag 3\0"}; // Pet tags
 volatile bool tag_permission[3] = {false, false, false}; // Autorizacao para cada pet
 
-float distance = 0.0;
-int64_t echo_duration = 0;
-uint slice;
-bool open_door = false;
-
 
 /* ------------------------------------------ MAIN FUNCTION ---------------------------------------------------------------*/
 int main(void) {
@@ -242,15 +237,6 @@ int main(void) {
         panic("dns request failed");
     }
 
-    /* --------------------- Configuracao de periféricos -----------------------------*/
-
-    hcsr04_init(); // Inicializa o sensor ultrassônico
-    slice = servomotor_setup(); // Inicializa o servomotor
-    servomotor_set_position(slice, 65536/2);
-
-    gpio_init(11); // Inicializa o LED
-    gpio_set_dir(11, GPIO_OUT); // Configura o LED como saída
-    gpio_put(11, 0); // Liga o LED
 
     /*-------------------------------------------------------------------------*/
 
@@ -433,33 +419,9 @@ static void mqtt_incoming_publish_cb(void *arg, const char *topic, u32_t tot_len
 // Publicar temperatura
 static void controller_worker_fn(async_context_t *context, async_at_time_worker_t *worker) {
     MQTT_CLIENT_DATA_T* state = (MQTT_CLIENT_DATA_T*)worker->user_data;
-    echo_duration = hcsr04_get_echo_duration();
-
-    if (echo_duration > 0) {
-        distance = hcsr04_calculate_distance(echo_duration);
-    }
-
-    if (distance < 20.0 && !door_locked && stdio_usb_connected()) {
-        // Leitura da coleira (simulado)
-        printf("Select tag (1-3): ");
-        int tag = getchar_timeout_us(2000000);
-        printf("----\n");
-        
-        if (tag != PICO_ERROR_TIMEOUT) {
-            uint8_t tag_index = tag - '0' - 1; // Converte o caractere para índice
-            open_door |= (tag_index < 3 && tag_permission[tag_index]);
-        }
-    }else if(distance > 20.0) {
-        open_door = false;
-    }
-
-    if (open_door) {
-        servomotor_set_position(slice, 6000);
-        gpio_put(11, 1);
-    } else {
-        servomotor_set_position(slice, 1250);
-        gpio_put(11, 0);
-    }
+    
+    //-------------------------------- CONTROLLER LOGIC ------------------------------------
+    
     async_context_add_at_time_worker_in_ms(context, worker, TEMP_WORKER_TIME_S * 1000);
 }
 
